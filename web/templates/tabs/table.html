@@ -1,0 +1,17 @@
+<div class="table-container">
+  <div class="table-scroll">
+    <table class="data-table">
+      <thead><tr>
+        {% for h in csv_headers %}<th>{{ h }}</th>{% endfor %}
+      </tr></thead>
+      <tbody>
+        {% for row in csv_data %}
+        <tr>
+          {% for h in csv_headers %}<td>{{ row[h] }}</td>{% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="table-meta">共 {{ csv_data | length }} 行数据</p>
+</div>

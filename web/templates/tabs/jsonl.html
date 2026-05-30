@@ -1,0 +1,14 @@
+<div class="jsonl-container">
+  {% for record in jsonl_data %}
+  <details class="jsonl-record">
+    <summary>
+      <span class="record-code">{{ record.fields.code or 'N/A' }}</span>
+      <span class="record-name">{{ record.fields.name or '' }}</span>
+      {% if record.validation_errors %}
+        <span class="error-badge">{{ record.validation_errors | length }} 个错误</span>
+      {% endif %}
+    </summary>
+    <pre class="json-code">{{ record | tojson_pretty }}</pre>
+  </details>
+  {% endfor %}
+</div>

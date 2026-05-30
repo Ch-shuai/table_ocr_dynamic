@@ -1,0 +1,8 @@
+opencv-python>=4.8
+numpy>=1.24
+pandas>=2.0
+openpyxl>=3.1
+pillow>=10.0
+# OCR engine. If installation fails on your machine, install PaddleOCR/PaddlePaddle according to your platform first.
+paddleocr>=2.7.0
+paddlepaddle>=2.6.0

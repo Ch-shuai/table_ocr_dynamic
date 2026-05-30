@@ -1,0 +1,15 @@
+<div class="preview-container">
+  <div class="image-wrapper" id="imageWrapper">
+    <img src="{{ url_for('original_image', run_id=run_id) }}" alt="原始图片" id="originalImage"
+         data-columns='{{ layout_data.columns | tojson }}'
+         data-rows='{{ layout_data.rows | tojson }}'>
+  </div>
+  <div class="preview-info">
+    <p>列数: <strong>{{ layout_data.columns | length }}</strong> | 行数: <strong>{{ layout_data.rows | length }}</strong></p>
+    {% if layout_data.warnings %}
+      <div class="warnings">
+        {% for w in layout_data.warnings %}<p class="warning">&#9888; {{ w }}</p>{% endfor %}
+      </div>
+    {% endif %}
+  </div>
+</div>

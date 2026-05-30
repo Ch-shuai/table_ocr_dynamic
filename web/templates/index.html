@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="upload-section">
+  <form action="{{ url_for('parse') }}" method="post" enctype="multipart/form-data">
+    <div class="drop-zone" id="dropZone">
+      <input type="file" name="image" accept="image/png,image/jpeg,image/jpg" id="fileInput" required>
+      <p>&#128193; 拖拽图片到这里 或 <span class="clickable">点击选择</span></p>
+      <p class="hint">支持 PNG、JPG 格式</p>
+      <div class="file-name" id="fileName"></div>
+    </div>
+
+    <details class="config-panel" open>
+      <summary>&#9881;&#65039; 参数配置</summary>
+      <div class="config-grid">
+        <label>
+          快照时间
+          <input type="text" name="snapshot_time" placeholder="2026-05-29 10:30:00">
+        </label>
+        <label>
+          最低置信度
+          <input type="range" name="min_confidence" min="0.5" max="1.0" step="0.01" value="0.85" id="confSlider">
+          <span id="confValue">0.85</span>
+        </label>
+        <label class="checkbox">
+          <input type="checkbox" name="binarize_cells"> 单元格二值化
+        </label>
+        <label class="checkbox">
+          <input type="checkbox" name="detect_only"> 仅检测表格结构（不跑 OCR）
+        </label>
+        <label class="checkbox">
+          <input type="checkbox" name="debug_cells" checked> 保存单元格裁剪图
+        </label>
+      </div>
+    </details>
+
+    <button type="submit" class="submit-btn">&#128640; 运行解析</button>
+  </form>
+</div>
+
+{% if has_result %}
+<div class="result-section" data-run-id="{{ run_id }}">
+  {% if stats %}
+  <div class="stats-panel">
+    <div class="stats-header">
+      <h2>识别率统计</h2>
+      <div class="overall-rate">{{ stats.overall_rate }}%</div>
+    </div>
+    <div class="stats-summary">
+      <div class="stat-item">
+        <span class="stat-value">{{ stats.total_records }}</span>
+        <span class="stat-label">行数</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-value">{{ stats.total_fields }}</span>
+        <span class="stat-label">列数</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-value">{{ stats.total_cells }}</span>
+        <span class="stat-label">总单元格</span>
+      </div>
+      <div class="stat-item success">
+        <span class="stat-value">{{ stats.high_conf }}</span>
+        <span class="stat-label">高置信度</span>
+      </div>
+      <div class="stat-item warning">
+        <span class="stat-value">{{ stats.low_conf }}</span>
+        <span class="stat-label">低置信度</span>
+      </div>
+      <div class="stat-item info">
+        <span class="stat-value">{{ stats.empty }}</span>
+        <span class="stat-label">原始为空</span>
+      </div>
+      {% if elapsed_time is not none %}
+      <div class="stat-item" style="border-color: #1a73e8;">
+        <span class="stat-value" style="color: #1a73e8;">{{ elapsed_time }}s</span>
+        <span class="stat-label">运行耗时</span>
+      </div>
+      {% endif %}
+    </div>
+    <details class="field-stats-detail">
+      <summary>各字段识别率详情</summary>
+      <div class="field-stats-table">
+        <table class="data-table">
+          <thead>
+            <tr><th>字段</th><th>高置信度</th><th>低置信度</th><th>原始为空</th><th>识别率</th></tr>
+          </thead>
+          <tbody>
+            {% for key, s in stats.field_stats.items() %}
+            <tr>
+              <td><code>{{ key }}</code></td>
+              <td>{{ s.high_conf }}</td>
+              <td {% if s.low_conf > 0 %}class="low-highlight"{% endif %}>{{ s.low_conf }}</td>
+              <td>{{ s.empty }}</td>
+              <td class="{% if s.rate >= 99 %}rate-excellent{% elif s.rate >= 95 %}rate-good{% else %}rate-bad{% endif %}">{{ s.rate }}%</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </details>
+  </div>
+  {% endif %}
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="preview">原始预览</button>
+    <button class="tab-btn" data-tab="table">数据表格</button>
+    <button class="tab-btn" data-tab="jsonl">JSONL</button>
+    <button class="tab-btn" data-tab="layout">布局坐标</button>
+    <button class="tab-btn" data-tab="errors">错误报告</button>
+    <button class="tab-btn" data-tab="cells">单元格图片</button>
+    <button class="tab-btn" data-tab="stocks">单股 JSON</button>
+  </div>
+
+  <div class="tab-content">
+    <div class="tab-panel active" id="tab-preview">
+      {% include "tabs/preview.html" %}
+    </div>
+    <div class="tab-panel" id="tab-table">
+      {% include "tabs/table.html" %}
+    </div>
+    <div class="tab-panel" id="tab-jsonl">
+      {% include "tabs/jsonl.html" %}
+    </div>
+    <div class="tab-panel" id="tab-layout">
+      {% include "tabs/layout.html" %}
+    </div>
+    <div class="tab-panel" id="tab-errors">
+      {% include "tabs/errors.html" %}
+    </div>
+    <div class="tab-panel" id="tab-cells">
+      {% include "tabs/cells.html" %}
+    </div>
+    <div class="tab-panel" id="tab-stocks">
+      {% include "tabs/stocks.html" %}
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

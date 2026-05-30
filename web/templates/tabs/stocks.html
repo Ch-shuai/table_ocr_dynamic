@@ -1,0 +1,8 @@
+<div class="stocks-container">
+  {% for fname in stock_files %}
+  <details class="stock-record">
+    <summary>{{ fname }}</summary>
+    <pre class="json-code">加载中...</pre>
+  </details>
+  {% endfor %}
+</div>

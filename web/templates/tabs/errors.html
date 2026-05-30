@@ -1,0 +1,39 @@
+<div class="errors-container">
+  <div class="errors-grid">
+    <div class="error-section">
+      <h3>低置信度 / 格式异常 ({{ error_data | length }} 条)</h3>
+      {% if error_data %}
+      <div class="table-scroll" style="max-height: 400px;">
+        <table class="data-table">
+          <thead><tr><th>行</th><th>字段</th><th>原始值</th><th>标准化</th><th>置信度</th><th>原因</th></tr></thead>
+          <tbody>
+            {% for err in error_data %}
+            {% if err.level != 'info' %}
+            <tr>
+              <td>{{ err.row_index or '-' }}</td>
+              <td>{{ err.field or '-' }}</td>
+              <td>{{ err.raw_text or '-' }}</td>
+              <td>{{ err.normalized or '-' }}</td>
+              <td>{{ err.confidence or '-' }}</td>
+              <td><code>{{ err.reason }}</code></td>
+            </tr>
+            {% endif %}
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <p class="no-errors">&#9989; 无异常记录</p>
+      {% endif %}
+    </div>
+
+    <div class="error-section">
+      <h3>修正日志</h3>
+      {% if log_content %}
+      <pre class="log-content">{{ log_content }}</pre>
+      {% else %}
+      <p class="no-errors">无修正记录</p>
+      {% endif %}
+    </div>
+  </div>
+</div>

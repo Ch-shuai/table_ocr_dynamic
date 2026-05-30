@@ -1,0 +1,42 @@
+<div class="layout-container">
+  <div class="layout-grid">
+    <div class="layout-section">
+      <h3>列坐标 ({{ layout_data.columns | length }} 列)</h3>
+      <div class="table-scroll">
+        <table class="data-table">
+          <thead><tr><th>字段</th><th>key</th><th>x1</th><th>x2</th><th>宽度</th></tr></thead>
+          <tbody>
+            {% for col in layout_data.columns %}
+            <tr>
+              <td>{{ col.title }}</td>
+              <td><code>{{ col.key }}</code></td>
+              <td>{{ col.x1 }}</td>
+              <td>{{ col.x2 }}</td>
+              <td>{{ col.x2 - col.x1 }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="layout-section">
+      <h3>行坐标 ({{ layout_data.rows | length }} 行)</h3>
+      <div class="table-scroll" style="max-height: 500px;">
+        <table class="data-table">
+          <thead><tr><th>索引</th><th>y1</th><th>y2</th><th>高度</th><th>锚点文本</th></tr></thead>
+          <tbody>
+            {% for row in layout_data.rows %}
+            <tr>
+              <td>{{ row.index }}</td>
+              <td>{{ row.y1 }}</td>
+              <td>{{ row.y2 }}</td>
+              <td>{{ row.y2 - row.y1 }}</td>
+              <td>{{ row.anchor_text or '-' }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>

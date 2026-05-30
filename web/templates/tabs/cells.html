@@ -1,0 +1,15 @@
+<div class="cells-container">
+  {% for group in debug_cells %}
+  <details class="cell-group" {% if loop.first %}open{% endif %}>
+    <summary>{{ group.subdir }} ({{ group.images | length }} 张)</summary>
+    <div class="cell-grid">
+      {% for img in group.images %}
+      <div class="cell-thumb">
+        <img src="{{ url_for('cell_image', run_id=run_id, subdir=group.subdir, filename=img) }}" alt="{{ img }}">
+        <span class="cell-label">{{ img }}</span>
+      </div>
+      {% endfor %}
+    </div>
+  </details>
+  {% endfor %}
+</div>

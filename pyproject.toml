@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "stock-table-ocr-dynamic"
+version = "0.1.0"
+description = "Dynamic-structure OCR parser for Chinese stock market table screenshots."
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{name = "ch_shuai project scaffold"}]
+dependencies = [
+  "flask>=3.0",
+  "opencv-python>=4.8",
+  "numpy>=1.24",
+  "pandas>=2.0",
+  "openpyxl>=3.1",
+  "pillow>=10.0",
+]
+
+[project.optional-dependencies]
+ocr = [
+  "paddleocr>=2.7.0",
+  "paddlepaddle>=2.6.0",
+]
+test = ["pytest>=7.0"]
+
+[project.scripts]
+stock-table-ocr = "stock_table_ocr.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

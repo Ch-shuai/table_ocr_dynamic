@@ -1,0 +1,38 @@
+{
+  "template_name": "market_table_white_dynamic_structure_v1",
+  "description": "固定结构，不固定像素。程序运行时动态检测表格区域、列边界和行边界。",
+  "header_keywords": ["代码", "名称", "涨幅%", "现价", "涨速%", "涨跌", "主力净量", "主力净流入", "市盈TTM", "换手%", "委比%", "量比", "现量", "总量", "总金额", "总市值", "流通市值", "所属行业", "流通股本", "总股本", "5日涨幅"],
+  "row_anchor": {
+    "column": "code",
+    "pattern": "\\d{6}"
+  },
+  "columns": [
+    {"title": "代码", "key": "code", "type": "stock_code", "aliases": ["代码", "证券代码"]},
+    {"title": "名称", "key": "name", "type": "stock_name", "aliases": ["名称", "股票名称", "证券简称"]},
+    {"title": "涨幅%", "key": "change_pct", "type": "percent", "aliases": ["涨幅%", "涨幅", "涨跌幅"]},
+    {"title": "现价", "key": "price", "type": "number", "aliases": ["现价", "最新价", "价格"]},
+    {"title": "涨速%", "key": "speed_pct", "type": "percent", "aliases": ["涨速%", "涨速"]},
+    {"title": "涨跌", "key": "change_amount", "type": "number", "aliases": ["涨跌", "涨跌额"]},
+    {"title": "主力净量", "key": "main_volume", "type": "number", "aliases": ["主力净量"]},
+    {"title": "主力净流入", "key": "main_net_inflow", "type": "unit_number", "aliases": ["主力净流入", "主力净额"]},
+    {"title": "市盈TTM", "key": "pe_ttm", "type": "number_or_empty", "aliases": ["市盈TTM", "市盈 TTM", "PE TTM"]},
+    {"title": "换手%", "key": "turnover_pct", "type": "percent_non_negative", "aliases": ["换手%", "换手", "换手率"]},
+    {"title": "委比%", "key": "entrust_pct", "type": "percent_range", "aliases": ["委比%", "委比"]},
+    {"title": "量比", "key": "volume_ratio", "type": "number_non_negative", "aliases": ["量比"]},
+    {"title": "现量", "key": "current_volume", "type": "unit_number_with_arrow", "aliases": ["现量"]},
+    {"title": "总量", "key": "total_volume", "type": "unit_number", "aliases": ["总量", "成交量"]},
+    {"title": "总金额", "key": "total_amount", "type": "unit_number", "aliases": ["总金额", "成交额"]},
+    {"title": "总市值", "key": "total_market_cap", "type": "unit_number", "aliases": ["总市值"]},
+    {"title": "流通市值", "key": "float_market_cap", "type": "unit_number", "aliases": ["流通市值"]},
+    {"title": "所属行业", "key": "industry", "type": "text", "aliases": ["所属行业", "行业"]},
+    {"title": "流通股本", "key": "float_shares", "type": "unit_number", "aliases": ["流通股本"]},
+    {"title": "总股本", "key": "total_shares", "type": "unit_number", "aliases": ["总股本"]},
+    {"title": "5日涨幅", "key": "five_day_change_pct", "type": "percent", "aliases": ["5日涨幅", "五日涨幅"]}
+  ],
+  "detection": {
+    "min_vertical_lines_ratio": 0.65,
+    "min_horizontal_lines": 3,
+    "min_cell_confidence": 0.85,
+    "debug_save_cells": false
+  }
+}
