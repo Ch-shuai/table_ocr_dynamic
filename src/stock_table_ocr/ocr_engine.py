@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import List, Optional, Sequence
+import os
+from typing import List, Optional, Tuple
 
 import numpy as np
 
@@ -42,17 +43,30 @@ class PaddleOCREngine(BaseOCREngine):
             raise RuntimeError(
                 "PaddleOCR is not installed or cannot be imported. Install with: pip install -r requirements.txt"
             ) from exc
-        self.engine = PaddleOCR(lang=lang, use_angle_cls=use_angle_cls, **kwargs)
+        # Table screenshots do not need PaddleOCR's document orientation and
+        # unwarping pipelines. Keeping them off avoids extra models and keeps
+        # long-running web workers lighter.
+        kwargs.setdefault("use_doc_orientation_classify", False)
+        kwargs.setdefault("use_doc_unwarping", False)
+        kwargs.setdefault("use_textline_orientation", False)
+        kwargs.setdefault("text_detection_model_name", os.getenv("STOCK_TABLE_OCR_DET_MODEL", "PP-OCRv5_mobile_det"))
+        kwargs.setdefault("text_recognition_model_name", os.getenv("STOCK_TABLE_OCR_REC_MODEL", "PP-OCRv5_mobile_rec"))
+        kwargs.setdefault("text_recognition_batch_size", int(os.getenv("STOCK_TABLE_OCR_REC_BATCH_SIZE", "1")))
+
+        paddle_kwargs = dict(kwargs)
+        # PaddleOCR v3 treats use_angle_cls and use_textline_orientation as
+        # mutually exclusive, even when both are false. Prefer the v3 option.
+        if "use_textline_orientation" not in paddle_kwargs:
+            paddle_kwargs["use_angle_cls"] = use_angle_cls
+        if paddle_kwargs.get("text_detection_model_name") or paddle_kwargs.get("text_recognition_model_name"):
+            self.engine = PaddleOCR(**paddle_kwargs)
+        else:
+            self.engine = PaddleOCR(lang=lang, **paddle_kwargs)
 
     def recognize(self, image: np.ndarray) -> List[OCRText]:  # pragma: no cover - depends on optional package/model
         # PaddleOCR 3.6.0+ (PaddleX pipeline) enables doc orientation classify
         # and unwarping by default, which destroys small cell images. Disable them.
-        result = self.engine.ocr(
-            image,
-            use_doc_orientation_classify=False,
-            use_doc_unwarping=False,
-            use_textline_orientation=False,
-        )
+        result = self.engine.ocr(image)
         return parse_paddle_result(result)
 
 

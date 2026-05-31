@@ -95,6 +95,28 @@ python -m stock_table_ocr.cli \
   --debug-cells
 ```
 
+默认 OCR 配置面向表格截图的连续识别场景做了优化：
+
+- 关闭 PaddleOCR 的文档方向分类、文档矫正和文本行方向分类；
+- 默认使用 `PP-OCRv5_mobile_det` + `PP-OCRv5_mobile_rec`；
+- 默认设置 `text_recognition_batch_size=1`，在 Mac CPU 环境下对大量小文本块更快；
+- Web 服务会在进程内复用同一个 OCR 引擎，避免每次上传都重新加载模型。
+
+可通过环境变量覆盖模型和识别批量大小：
+
+```bash
+export STOCK_TABLE_OCR_DET_MODEL=PP-OCRv5_mobile_det
+export STOCK_TABLE_OCR_REC_MODEL=PP-OCRv5_mobile_rec
+export STOCK_TABLE_OCR_REC_BATCH_SIZE=1
+```
+
+如果更看重极限速度、能接受更多低置信度复核项，可临时尝试：
+
+```bash
+export STOCK_TABLE_OCR_DET_MODEL=PP-OCRv3_mobile_det
+export STOCK_TABLE_OCR_REC_MODEL=PP-OCRv3_mobile_rec
+```
+
 输出包括：
 
 ```text

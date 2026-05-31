@@ -18,7 +18,7 @@ def load_stock_dict(path: str | Path | None) -> Dict[str, Dict[str, str]]:
         for row in reader:
             code = (row.get("code") or row.get("代码") or "").strip()
             name = (row.get("name") or row.get("名称") or "").strip()
-            if re.fullmatch(r"\d{6}", code):
+            if re.fullmatch(r"[A-Za-z]{0,2}\d{4,6}", code):
                 result[code] = {"name": name, **row}
         return result
 
@@ -26,9 +26,10 @@ def load_stock_dict(path: str | Path | None) -> Dict[str, Dict[str, str]]:
 def validate_field(field_type: str, value: str) -> Tuple[bool, str | None]:
     value = value or ""
     if field_type == "stock_code":
-        if re.fullmatch(r"\d{6}", value):
+        # Support standard 6-digit codes and commodity/ETF codes like AU9999
+        if re.fullmatch(r"[A-Za-z]{0,2}\d{4,6}", value):
             return True, None
-        return False, "stock_code_must_be_6_digits"
+        return False, "stock_code_format_invalid"
 
     if field_type == "stock_name":
         return (bool(value), None if value else "stock_name_empty")
@@ -113,7 +114,7 @@ def correct_name_by_code(fields: Dict[str, str], stock_dict: Dict[str, Dict[str,
 def validate_row_consistency(fields: Dict[str, str]) -> List[Dict[str, str]]:
     errors: List[Dict[str, str]] = []
     code = fields.get("code", "")
-    if not re.fullmatch(r"\d{6}", code or ""):
+    if not re.fullmatch(r"[A-Za-z]{0,2}\d{4,6}", code or ""):
         errors.append({"level": "error", "field": "code", "reason": "row_anchor_code_missing_or_invalid"})
 
     # Direction check: change_pct and change_amount should usually have the same sign.

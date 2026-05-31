@@ -26,13 +26,10 @@ def write_csv(records: List[StockRecord], path: str | Path, field_order: List[st
 def write_excel(records: List[StockRecord], path: str | Path, field_order: List[str]) -> None:
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    rows = [r.to_flat_dict(include_meta=True) for r in records]
-    columns = ["snapshot_time", "source_image"] + field_order + ["validation_error_count"]
+    rows = [r.to_flat_dict(include_meta=False) for r in records]
     df = pd.DataFrame(rows)
-    for col in columns:
-        if col not in df.columns:
-            df[col] = ""
-    df = df[columns]
+    # Reorder to match field_order; drop any extra columns
+    df = df[[c for c in field_order if c in df.columns]]
     with pd.ExcelWriter(path, engine="openpyxl") as writer:
         df.to_excel(writer, index=False, sheet_name="stocks")
         err_rows = []

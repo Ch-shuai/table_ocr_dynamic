@@ -12,7 +12,7 @@ from .config import load_columns, load_schema
 from .header_locator import infer_columns_from_header_ocr
 from .image_utils import crop_with_padding, prepare_cell_for_ocr, read_image, write_image
 from .line_detector import choose_grid_boundaries, detect_table_lines
-from .models import ParseResult, RuntimeColumn, RuntimeRow, StockRecord
+from .models import OCRText, ParseResult, RuntimeColumn, RuntimeRow, StockRecord
 from .normalizers import normalize_by_type
 from .ocr_engine import BaseOCREngine
 from .validators import correct_name_by_code, load_stock_dict, validate_field, validate_row_consistency
@@ -82,6 +82,51 @@ def _fallback_columns_by_equal_width(image_width: int, schema_columns) -> List[R
     boundaries = [int(round(i * image_width / n)) for i in range(n + 1)]
     boundaries[-1] = image_width - 1
     return _runtime_columns_from_grid(boundaries, schema_columns)
+
+
+def _find_runtime_column(columns: List[RuntimeColumn], x: float) -> Optional[RuntimeColumn]:
+    for col in columns:
+        if col.x1 <= x <= col.x2:
+            return col
+    return None
+
+
+def _find_runtime_row(rows: List[RuntimeRow], y: float) -> Optional[RuntimeRow]:
+    for row in rows:
+        if row.y1 <= y <= row.y2:
+            return row
+    return None
+
+
+def _recognize_cells_from_page(
+    image: np.ndarray,
+    runtime_columns: List[RuntimeColumn],
+    runtime_rows: List[RuntimeRow],
+    ocr_engine: BaseOCREngine,
+) -> Dict[Tuple[int, str], OCRText]:
+    """Run OCR once on the full screenshot and assign text blocks to cells."""
+    page_items = ocr_engine.recognize(image)
+    grouped: Dict[Tuple[int, str], List[OCRText]] = {}
+
+    for item in page_items:
+        cx, cy = item.center
+        row = _find_runtime_row(runtime_rows, cy)
+        if row is None:
+            continue
+        col = _find_runtime_column(runtime_columns, cx)
+        if col is None:
+            continue
+        grouped.setdefault((row.index, col.key), []).append(item)
+
+    cell_results: Dict[Tuple[int, str], OCRText] = {}
+    for key, items in grouped.items():
+        items.sort(key=lambda item: (item.center[1], item.center[0]))
+        text = "".join(item.text for item in items).strip()
+        confs = [item.confidence for item in items if item.confidence is not None]
+        confidence = float(sum(confs) / len(confs)) if confs else 0.0
+        cell_results[key] = OCRText(text=text, confidence=confidence, box=items[0].box if items else None)
+
+    return cell_results
 
 
 def compute_runtime_layout(

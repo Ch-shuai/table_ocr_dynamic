@@ -25,7 +25,8 @@ def normalize_code(text: str | None) -> str:
     text = clean_common(text)
     text = text.replace("O", "0").replace("o", "0")
     text = text.replace("I", "1").replace("l", "1").replace("|", "1")
-    return re.sub(r"\D", "", text)
+    # Keep letters and digits (supports codes like AU9999, sh000001)
+    return re.sub(r"[^A-Za-z0-9]", "", text)
 
 
 def normalize_percent(text: str | None, add_symbol: bool = True) -> str:
@@ -57,8 +58,10 @@ def normalize_unit_number(text: str | None) -> str:
     if text in {"", "--"}:
         return text
     text = text.replace("O", "0").replace("o", "0")
-    # Preserve financial units and arrows.
-    allowed = re.findall(r"[+-]?\d+(?:\.\d+)?(?:万|亿|K|k|M|m)?[↑↓]?", text)
+    # OCR sometimes misrecognises ↑ as Chinese character "个" (especially for green/red arrows).
+    text = text.replace("个", "↑")
+    # Preserve financial units and arrows. "万亿" must come before "万" to avoid partial match.
+    allowed = re.findall(r"[+-]?\d+(?:\.\d+)?(?:万亿|万|亿|K|k|M|m)?[↑↓]?", text)
     if allowed:
         out = allowed[0].replace("k", "K").replace("m", "M")
         return out

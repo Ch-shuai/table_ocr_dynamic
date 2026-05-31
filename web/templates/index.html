@@ -101,6 +101,11 @@
     </details>
   </div>
   {% endif %}
+  <div class="download-bar">
+    <a href="{{ url_for('download_excel', run_id=run_id) }}" class="download-btn">
+      &#128229; 下载 Excel (含 stocks + errors 两个 sheet)
+    </a>
+  </div>
   <div class="tabs">
     <button class="tab-btn active" data-tab="preview">原始预览</button>
     <button class="tab-btn" data-tab="table">数据表格</button>

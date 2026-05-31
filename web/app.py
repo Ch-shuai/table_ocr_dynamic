@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import json
 import sys
+import threading
 import time
 from datetime import datetime
 from pathlib import Path
@@ -33,6 +34,20 @@ app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024  # 16MB
 UPLOAD_DIR = BASE_DIR / "uploads"
 UPLOAD_DIR.mkdir(exist_ok=True)
 
+_OCR_ENGINE = None
+_OCR_ENGINE_INIT_LOCK = threading.Lock()
+_OCR_RECOGNITION_LOCK = threading.Lock()
+
+
+def get_ocr_engine():
+    """Create one PaddleOCR engine per web process and reuse it across requests."""
+    global _OCR_ENGINE
+    if _OCR_ENGINE is None:
+        with _OCR_ENGINE_INIT_LOCK:
+            if _OCR_ENGINE is None:
+                _OCR_ENGINE = build_ocr_engine("paddle", lang="ch")
+    return _OCR_ENGINE
+
 
 @app.template_filter("tojson_pretty")
 def tojson_pretty(value):
@@ -51,7 +66,7 @@ def parse():
     if not file or file.filename == "":
         return "未选择图片", 400
 
-    run_id = datetime.now().strftime("run_%Y%m%d_%H%M%S")
+    run_id = datetime.now().strftime("run_%Y%m%d_%H%M%S_%f")
     run_upload_dir = UPLOAD_DIR / run_id
     run_upload_dir.mkdir(parents=True, exist_ok=True)
     image_path = run_upload_dir / "input.png"
@@ -88,19 +103,22 @@ def parse():
             layout_data=layout_data,
         )
 
-    ocr_engine = build_ocr_engine("paddle", lang="ch")
+    ocr_engine = get_ocr_engine()
     debug_dir = output_dir / "debug_cells" if debug_cells else None
 
-    result = parse_image(
-        image_path=str(image_path),
-        schema_path=str(schema_path),
-        ocr_engine=ocr_engine,
-        stock_dict_path=str(stock_dict_path),
-        snapshot_time=snapshot_time,
-        output_debug_cells_dir=debug_dir,
-        min_confidence=min_confidence,
-        binarize_cells=binarize_cells,
-    )
+    # PaddleOCR predictors are heavy and not guaranteed to be thread-safe.
+    # Serializing recognition keeps long-running web sessions stable under load.
+    with _OCR_RECOGNITION_LOCK:
+        result = parse_image(
+            image_path=str(image_path),
+            schema_path=str(schema_path),
+            ocr_engine=ocr_engine,
+            stock_dict_path=str(stock_dict_path),
+            snapshot_time=snapshot_time,
+            output_debug_cells_dir=debug_dir,
+            min_confidence=min_confidence,
+            binarize_cells=binarize_cells,
+        )
 
     elapsed = round(time.time() - start_time, 2)
     (output_dir / ".elapsed").write_text(str(elapsed))
@@ -275,6 +293,22 @@ def original_image(run_id):
 @app.route("/stock_json/<run_id>/<filename>")
 def stock_json(run_id, filename):
     return send_from_directory(BASE_DIR / "output" / run_id / "stocks", filename)
+
+
+@app.route("/download_excel/<run_id>")
+def download_excel(run_id):
+    output_dir = BASE_DIR / "output" / run_id
+    if not output_dir.exists():
+        return "结果不存在", 404
+    excel_files = list(output_dir.glob("market_table_*.xlsx"))
+    if not excel_files:
+        return "Excel 文件不存在", 404
+    return send_from_directory(
+        output_dir,
+        excel_files[0].name,
+        as_attachment=True,
+        download_name=f"stock_table_{run_id}.xlsx",
+    )
 
 
 if __name__ == "__main__":
