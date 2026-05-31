@@ -7,7 +7,7 @@
       <tbody>
         {% for row in csv_data %}
         <tr>
-          {% for h in csv_headers %}<td>{{ row[h] }}</td>{% endfor %}
+          {% for h in csv_headers %}<td>{% if row[h] %}{{ row[h] }}{% else %}--{% endif %}</td>{% endfor %}
         </tr>
         {% endfor %}
       </tbody>
