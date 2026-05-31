@@ -1,6 +1,117 @@
 {% extends "base.html" %}
 
 {% block content %}
+<div class="tasks-section" id="tasksSection">
+  <h3>&#128260; 外部识别任务状态 <span class="refresh-hint">(每3秒自动刷新)</span></h3>
+  <table class="data-table" id="tasksTable">
+    <thead>
+      <tr>
+        <th>批次ID</th>
+        <th>交易日</th>
+        <th>状态</th>
+        <th>进度</th>
+        <th>创建时间</th>
+        <th>开始时间</th>
+        <th>完成时间</th>
+        <th>耗时</th>
+        <th>识别数</th>
+        <th>错误</th>
+      </tr>
+    </thead>
+    <tbody id="tasksBody">
+      {% for t in tasks %}
+      <tr data-batch-id="{{ t.batch_id }}">
+        <td><code>{{ t.batch_id[:20] }}...</code></td>
+        <td>{{ t.trade_date or '-' }}</td>
+        <td>
+          {% if t.status == 'accepted' %}
+            <span class="badge badge-info">已接收</span>
+          {% elif t.status == 'loading_model' %}
+            <span class="badge badge-info">加载模型</span>
+          {% elif t.status == 'processing' %}
+            <span class="badge badge-warning">识别中</span>
+          {% elif t.status == 'callback' %}
+            <span class="badge badge-warning">回调中</span>
+          {% elif t.status == 'completed' %}
+            <span class="badge badge-success">已完成</span>
+          {% elif t.status == 'failed' %}
+            <span class="badge badge-error">失败</span>
+          {% else %}
+            <span class="badge">{{ t.status }}</span>
+          {% endif %}
+        </td>
+        <td>
+          <div class="progress-bar">
+            <div class="progress-fill" style="width: {{ t.progress or 0 }}%"></div>
+          </div>
+          <span class="progress-text">{{ t.progress or 0 }}%</span>
+        </td>
+        <td>{{ t.created_at or '-' }}</td>
+        <td>{{ t.started_at or '-' }}</td>
+        <td>{{ t.completed_at or '-' }}</td>
+        <td>{{ t.duration_seconds ~ 's' if t.duration_seconds is not none else '-' }}</td>
+        <td>{{ t.stock_count if t.stock_count is not none else '-' }}</td>
+        <td>{{ t.error[:30] ~ '...' if t.error else '-' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% if not tasks %}
+  <p class="no-tasks">暂无外部识别任务</p>
+  {% endif %}
+</div>
+
+<script>
+(function() {
+  const STATUS_MAP = {
+    'accepted': '<span class="badge badge-info">已接收</span>',
+    'loading_model': '<span class="badge badge-info">加载模型</span>',
+    'processing': '<span class="badge badge-warning">识别中</span>',
+    'callback': '<span class="badge badge-warning">回调中</span>',
+    'completed': '<span class="badge badge-success">已完成</span>',
+    'failed': '<span class="badge badge-error">失败</span>'
+  };
+
+  function renderTasks(tasks) {
+    const tbody = document.getElementById('tasksBody');
+    if (!tbody) return;
+    if (!tasks || tasks.length === 0) {
+      tbody.innerHTML = '';
+      return;
+    }
+    tbody.innerHTML = tasks.map(t => `
+      <tr data-batch-id="${t.batch_id}">
+        <td><code>${(t.batch_id || '').slice(0,20)}...</code></td>
+        <td>${t.trade_date || '-'}</td>
+        <td>${STATUS_MAP[t.status] || `<span class="badge">${t.status}</span>`}</td>
+        <td>
+          <div class="progress-bar"><div class="progress-fill" style="width:${t.progress || 0}%"></div></div>
+          <span class="progress-text">${t.progress || 0}%</span>
+        </td>
+        <td>${t.created_at || '-'}</td>
+        <td>${t.started_at || '-'}</td>
+        <td>${t.completed_at || '-'}</td>
+        <td>${t.duration_seconds != null ? t.duration_seconds + 's' : '-'}</td>
+        <td>${t.stock_count != null ? t.stock_count : '-'}</td>
+        <td>${t.error ? (t.error.length > 30 ? t.error.slice(0,30) + '...' : t.error) : '-'}</td>
+      </tr>
+    `).join('');
+  }
+
+  async function refreshTasks() {
+    try {
+      const resp = await fetch('/tasks');
+      const data = await resp.json();
+      renderTasks(data.tasks);
+    } catch (e) {
+      // ignore
+    }
+  }
+
+  setInterval(refreshTasks, 3000);
+})();
+</script>
+
 <div class="upload-section">
   <form action="{{ url_for('parse') }}" method="post" enctype="multipart/form-data">
     <div class="drop-zone" id="dropZone">

@@ -138,6 +138,20 @@ code { background: #f0f0f0; padding: 2px 6px; border-radius: 3px; font-size: 12p
 }
 .download-btn:hover { background: #1b5e20; }
 
+/* Tasks */
+.tasks-section { background: #fff; border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+.tasks-section h3 { font-size: 16px; color: #333; margin-bottom: 15px; }
+.tasks-section .refresh-hint { font-size: 12px; color: #999; font-weight: normal; }
+.tasks-section .no-tasks { color: #999; font-size: 14px; padding: 20px; text-align: center; }
+.progress-bar { width: 80px; height: 8px; background: #e0e0e0; border-radius: 4px; overflow: hidden; display: inline-block; vertical-align: middle; }
+.progress-fill { height: 100%; background: #1a73e8; border-radius: 4px; transition: width 0.5s ease; }
+.progress-text { font-size: 11px; color: #666; margin-left: 6px; vertical-align: middle; }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 12px; font-weight: 500; }
+.badge-info { background: #e3f2fd; color: #1565c0; }
+.badge-warning { background: #fff3e0; color: #e65100; }
+.badge-success { background: #e8f5e9; color: #2e7d32; }
+.badge-error { background: #ffebee; color: #c62828; }
+
 /* Responsive */
 @media (max-width: 768px) {
   .container { padding: 10px; }

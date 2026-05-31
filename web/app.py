@@ -2,13 +2,16 @@ from __future__ import annotations
 
 import csv
 import json
+import os
+import re
 import sys
 import threading
 import time
+import urllib.request
 from datetime import datetime
 from pathlib import Path
 
-from flask import Flask, render_template, request, redirect, url_for, send_from_directory
+from flask import Flask, render_template, request, redirect, url_for, send_from_directory, jsonify
 
 # Ensure src/ is on path for imports
 BASE_DIR = Path(__file__).parent.parent
@@ -38,6 +41,25 @@ _OCR_ENGINE = None
 _OCR_ENGINE_INIT_LOCK = threading.Lock()
 _OCR_RECOGNITION_LOCK = threading.Lock()
 
+_RECOGNITION_TASKS: Dict[str, Dict[str, Any]] = {}
+_TASKS_LOCK = threading.Lock()
+
+
+def _upsert_task(batch_id: str, **kwargs) -> None:
+    """Thread-safe task status update."""
+    with _TASKS_LOCK:
+        if batch_id not in _RECOGNITION_TASKS:
+            _RECOGNITION_TASKS[batch_id] = {"batch_id": batch_id}
+        _RECOGNITION_TASKS[batch_id].update(kwargs)
+
+
+def _get_tasks(limit: int = 50) -> List[Dict[str, Any]]:
+    """Return latest tasks ordered by created_at desc."""
+    with _TASKS_LOCK:
+        tasks = list(_RECOGNITION_TASKS.values())
+    tasks.sort(key=lambda t: t.get("created_at", ""), reverse=True)
+    return tasks[:limit]
+
 
 def get_ocr_engine():
     """Create one PaddleOCR engine per web process and reuse it across requests."""
@@ -56,7 +78,12 @@ def tojson_pretty(value):
 
 @app.route("/")
 def index():
-    return render_template("index.html")
+    return render_template("index.html", tasks=_get_tasks())
+
+
+@app.route("/tasks")
+def tasks():
+    return jsonify({"tasks": _get_tasks()})
 
 
 @app.route("/parse", methods=["POST"])
@@ -311,5 +338,231 @@ def download_excel(run_id):
     )
 
 
+# ── External API for MoneyMoneyHome integration ──
+
+
+SCHEMA_PATH = BASE_DIR / "configs" / "stock_table_schema.json"
+STOCK_DICT_PATH = BASE_DIR / "data" / "stock_code_name_sample.csv"
+
+
+def _parse_unit_number_to_float(val: str) -> float | None:
+    """Convert unit_number string like '+1.23亿' or '-456.78万' to float (in 亿)."""
+    if val is None or val == "" or val == "-":
+        return None
+    text = str(val).strip()
+    # Extract numeric part and unit
+    m = re.search(r"[+-]?\d+(?:\.\d+)?", text)
+    if not m:
+        return None
+    num = float(m.group())
+    if "亿" in text:
+        return num
+    elif "万" in text:
+        return round(num / 10000, 4)
+    elif "K" in text.upper():
+        return round(num * 0.0001, 4)
+    elif "M" in text.upper():
+        return round(num * 0.01, 4)
+    else:
+        return num
+
+
+def _parse_percent(val: str) -> float | None:
+    """Convert percent string like '+1.23%' or '-0.56' to float."""
+    if val is None or val == "" or val == "-":
+        return None
+    text = str(val).replace("%", "").strip()
+    try:
+        return float(text)
+    except ValueError:
+        return None
+
+
+def _parse_number(val: str) -> float | None:
+    """Convert number string to float."""
+    if val is None or val == "" or val == "-":
+        return None
+    text = str(val).strip()
+    try:
+        return float(text)
+    except ValueError:
+        return None
+
+
+def _convert_record_to_snapshot(record, row_index: int) -> dict:
+    """Convert a StockRecord to the snapshot format expected by MoneyMoneyHome."""
+    fields = record.fields
+    raw = record.raw_cells
+    confidence = record.confidence
+
+    avg_conf = 0.0
+    if confidence:
+        avg_conf = round(sum(confidence.values()) / len(confidence), 4)
+
+    return {
+        "stock_code": fields.get("code", ""),
+        "stock_name": fields.get("name", ""),
+        "change_pct": _parse_percent(fields.get("change_pct")),
+        "current_price": _parse_number(fields.get("price")),
+        "volume_ratio": _parse_number(fields.get("volume_ratio")),
+        "turnover": _parse_percent(fields.get("turnover_pct")),
+        "main_inflow": _parse_unit_number_to_float(fields.get("main_net_inflow")),
+        "industry": fields.get("industry", ""),
+        "row_index": row_index,
+        "fields": fields,
+        "raw_columns": raw,
+        "ocr_confidence": avg_conf,
+        "parser_version": "stock_table_dynamic_v1",
+    }
+
+
+def _post_callback(callback_url: str, payload: dict) -> None:
+    """POST callback to MoneyMoneyHome using urllib."""
+    try:
+        body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+        req = urllib.request.Request(
+            callback_url,
+            data=body,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            resp.read()
+    except Exception as exc:
+        print(f"[ExternalOCR] Callback failed: {exc}", flush=True)
+
+
+def _process_external_recognition(
+    image_path: str,
+    batch_id: str,
+    trade_date: str,
+    captured_at: str,
+    callback_url: str,
+) -> None:
+    """Run OCR in background and callback MoneyMoneyHome."""
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    _upsert_task(batch_id=batch_id, status="loading_model", progress=5, started_at=now)
+    try:
+        print(f"[ExternalOCR] Processing {batch_id}: {image_path}", flush=True)
+        start = time.time()
+
+        ocr_engine = get_ocr_engine()
+        _upsert_task(batch_id=batch_id, status="processing", progress=30)
+        with _OCR_RECOGNITION_LOCK:
+            result = parse_image(
+                image_path=image_path,
+                schema_path=str(SCHEMA_PATH),
+                ocr_engine=ocr_engine,
+                stock_dict_path=str(STOCK_DICT_PATH),
+                snapshot_time=captured_at,
+                min_confidence=0.85,
+            )
+
+        elapsed = round(time.time() - start, 2)
+        snapshots = [
+            _convert_record_to_snapshot(r, i)
+            for i, r in enumerate(result.records)
+        ]
+
+        print(f"[ExternalOCR] {batch_id}: {len(snapshots)} stocks, {elapsed}s", flush=True)
+
+        _upsert_task(batch_id=batch_id, status="callback", progress=90)
+        _post_callback(callback_url, {
+            "batch_id": batch_id,
+            "trade_date": trade_date,
+            "status": "completed",
+            "snapshots": snapshots,
+            "error": "; ".join(result.warnings) if result.warnings else None,
+        })
+
+        _upsert_task(
+            batch_id=batch_id,
+            status="completed",
+            progress=100,
+            completed_at=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            duration_seconds=elapsed,
+            stock_count=len(snapshots),
+            error="; ".join(result.warnings) if result.warnings else None,
+        )
+
+    except Exception as exc:
+        print(f"[ExternalOCR] {batch_id} failed: {exc}", flush=True)
+        _upsert_task(batch_id=batch_id, status="callback", progress=90)
+        _post_callback(callback_url, {
+            "batch_id": batch_id,
+            "trade_date": trade_date,
+            "status": "failed",
+            "snapshots": [],
+            "error": str(exc),
+        })
+        _upsert_task(
+            batch_id=batch_id,
+            status="failed",
+            progress=100,
+            completed_at=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            error=str(exc),
+        )
+
+
+@app.route("/recognize", methods=["POST"])
+def recognize():
+    """Accept a screenshot path from MoneyMoneyHome and process it asynchronously.
+
+    Request body (JSON):
+        {
+            "image_path": "/path/to/screenshot.png",
+            "batch_id": "2025-05-31_143052...",
+            "trade_date": "2025-05-31",
+            "captured_at": "2025-05-31 14:30:52",
+            "callback_url": "http://127.0.0.1:8000/api/v1/moneymoney/news/stock-list-monitor/callback"
+        }
+    """
+    data = request.get_json(force=True) or {}
+    image_path = data.get("image_path")
+    batch_id = data.get("batch_id")
+    trade_date = data.get("trade_date")
+    captured_at = data.get("captured_at")
+    callback_url = data.get("callback_url")
+
+    if not image_path or not batch_id or not callback_url:
+        return jsonify({"status": "error", "message": "缺少必要参数: image_path, batch_id, callback_url"}), 400
+
+    if not Path(image_path).exists():
+        return jsonify({"status": "error", "message": f"图片不存在: {image_path}"}), 400
+
+    # Record task status
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    _upsert_task(
+        batch_id=batch_id,
+        trade_date=trade_date,
+        image_path=image_path,
+        callback_url=callback_url,
+        status="accepted",
+        created_at=now,
+        started_at=None,
+        completed_at=None,
+        duration_seconds=None,
+        stock_count=None,
+        error=None,
+    )
+
+    # Process in background so HTTP response returns immediately
+    t = threading.Thread(
+        target=_process_external_recognition,
+        kwargs={
+            "image_path": image_path,
+            "batch_id": batch_id,
+            "trade_date": trade_date,
+            "captured_at": captured_at,
+            "callback_url": callback_url,
+        },
+        daemon=True,
+    )
+    t.start()
+
+    return jsonify({"status": "accepted", "batch_id": batch_id})
+
+
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+    port = int(os.environ.get("FLASK_PORT", "5000"))
+    app.run(debug=True, use_reloader=False, port=port)
